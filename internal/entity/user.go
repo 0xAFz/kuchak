@@ -9,8 +9,3 @@ type User struct {
 	IsEmailVerified bool      `json:"is_email_verified"`
 	CreatedAt       time.Time `json:"created_at"`
 }
-
-type VerifyEmail struct {
-	Token string
-	Email string
-}

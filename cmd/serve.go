@@ -8,6 +8,7 @@ import (
 	"kuchak/internal/repository"
 	"kuchak/internal/repository/postgres"
 	"kuchak/internal/repository/redis"
+	"kuchak/internal/service"
 	"log"
 	"time"
 )
@@ -29,6 +30,16 @@ func Serve() {
 	}
 
 	URLRedisRepository := repository.NewURLRedisRepository(client)
+	URLPostgresRepository := repository.NewURLPostgresRepository(pgxSession)
+	accountPostgresRepository := repository.NewAccountPostgresRepository(pgxSession)
+	accountRedisRepository := repository.NewAccountRedisRepository(client)
+
+	app := service.NewApp(
+		service.NewAccountPostgresService(accountPostgresRepository),
+		service.NewURLPostgresService(URLPostgresRepository),
+		service.NewAccountRedisService(accountRedisRepository),
+		service.NewURLRedisService(URLRedisRepository),
+	)
 
 	expiry := time.Now().Add(5 * time.Minute)
 
@@ -42,12 +53,14 @@ func Serve() {
 		CreatedAt:   time.Now(),
 	}
 
-	err = URLRedisRepository.Save(context.Background(), url)
+	err = app.URLRedis.SetURLToCache(context.Background(), url)
+
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	u, err := URLRedisRepository.ByShortURL(context.Background(), "xyz")
+	u, err := app.URLRedis.GetFromCacheByShortURL(context.Background(), "xyz")
+
 	if err != nil {
 		log.Fatal(err)
 	}
