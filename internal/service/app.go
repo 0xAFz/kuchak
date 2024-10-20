@@ -1,4 +1,4 @@
-package services
+package service
 
 type App struct {
 	AccountPostgres *AccountPostgresService
