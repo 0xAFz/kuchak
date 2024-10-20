@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"kuchak/internal/config"
+	"kuchak/internal/entity"
+	"kuchak/internal/repository"
 	"kuchak/internal/repository/postgres"
 	"kuchak/internal/repository/redis"
 	"log"
+	"time"
 )
 
 func Serve() {
@@ -24,11 +27,32 @@ func Serve() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	cmd := client.B().Set().Key("key").Value("value").Build()
-	err = client.Do(context.Background(), cmd).Error()
-	if err != nil {
-		fmt.Println("Failed to set item in redis")
+
+	URLRedisRepository := repository.NewURLRedisRepository(client)
+
+	expiry := time.Now().Add(5 * time.Minute)
+
+	url := entity.URL{
+		ID:          1,
+		ShortURL:    "xyz",
+		OriginalURL: "https://domain.tld",
+		UserID:      1,
+		ClickCount:  100,
+		ExpiryDate:  &expiry,
+		CreatedAt:   time.Now(),
 	}
+
+	err = URLRedisRepository.Save(context.Background(), url)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	u, err := URLRedisRepository.ByShortURL(context.Background(), "xyz")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(u)
 
 	fmt.Println("Server is up and running...")
 }
