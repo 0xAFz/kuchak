@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"kuchak/internal/entity"
+	"time"
 )
 
 type Account interface {
@@ -21,8 +22,8 @@ type URL interface {
 }
 
 type AccountRedis interface {
-	SaveVerifyEmail(ctx context.Context, email, token string) error
-	ByToken(ctx context.Context, token string) entity.VerifyEmail
+	ByToken(ctx context.Context, token string) (string, error)
+	SaveVerifyToken(ctx context.Context, email, token string, ttl time.Duration) error
 }
 
 type URLRedis interface {
