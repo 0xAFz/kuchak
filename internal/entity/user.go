@@ -5,7 +5,7 @@ import "time"
 type User struct {
 	ID              int       `json:"id"`
 	Email           string    `json:"email"`
-	PasswordHash    string    `json:"_"`
+	Password        string    `json:"_"`
 	IsEmailVerified bool      `json:"is_email_verified"`
 	CreatedAt       time.Time `json:"created_at"`
 }
