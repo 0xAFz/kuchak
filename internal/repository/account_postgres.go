@@ -22,9 +22,9 @@ func NewAccountPostgresRepository(session *pgxpool.Pool) *AccountPostgresReposit
 }
 
 func (a *AccountPostgresRepository) ByID(ctx context.Context, ID int) (entity.User, error) {
-	query := `SELECT id, email, password_hash, created_at FROM users WHERE id = $1`
+	query := `SELECT id, email, password, created_at FROM users WHERE id = $1`
 	var user entity.User
-	err := a.session.QueryRow(ctx, query, ID).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.CreatedAt)
+	err := a.session.QueryRow(ctx, query, ID).Scan(&user.ID, &user.Email, &user.Password, &user.CreatedAt)
 	if err != nil {
 		return entity.User{}, fmt.Errorf("failed to get user by id %d: %w", ID, err)
 	}
@@ -33,9 +33,9 @@ func (a *AccountPostgresRepository) ByID(ctx context.Context, ID int) (entity.Us
 }
 
 func (a *AccountPostgresRepository) ByEmail(ctx context.Context, email string) (entity.User, error) {
-	query := `SELECT id, email, password_hash, created_at FROM users WHERE email = $1`
+	query := `SELECT id, email, password, created_at FROM users WHERE email = $1`
 	var user entity.User
-	err := a.session.QueryRow(ctx, query, email).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.CreatedAt)
+	err := a.session.QueryRow(ctx, query, email).Scan(&user.ID, &user.Email, &user.Password, &user.CreatedAt)
 	if err != nil {
 		return entity.User{}, fmt.Errorf("failed to get user by email %s: %w", email, err)
 	}
@@ -44,10 +44,10 @@ func (a *AccountPostgresRepository) ByEmail(ctx context.Context, email string) (
 }
 
 func (a *AccountPostgresRepository) Save(ctx context.Context, user entity.User) error {
-	query := `INSERT INTO users (email, password_hash)
+	query := `INSERT INTO users (email, password)
 			  VALUES ($1, $2)`
 
-	_, err := a.session.Exec(ctx, query, user.Email, user.PasswordHash)
+	_, err := a.session.Exec(ctx, query, user.Email, user.Password)
 	if err != nil {
 		return fmt.Errorf("failed to create new user: %w", err)
 	}
