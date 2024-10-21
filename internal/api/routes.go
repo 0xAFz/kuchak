@@ -3,8 +3,10 @@ package api
 import (
 	"kuchak/internal/config"
 	"kuchak/pkg/auth"
+	"kuchak/pkg/validate"
 	"net/http"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/golang-jwt/jwt/v5"
 	echojwt "github.com/labstack/echo-jwt/v4"
 	"github.com/labstack/echo/v4"
@@ -12,6 +14,11 @@ import (
 )
 
 func (w *WebApp) routes() {
+	v := validator.New()
+	v.RegisterValidation("password", validate.CustomPasswordValidator)
+
+	w.e.Validator = &validate.CustomValidator{Validator: v}
+
 	w.e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
 		AllowMethods: []string{
