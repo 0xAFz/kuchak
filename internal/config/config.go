@@ -6,6 +6,7 @@ import (
 
 type Config struct {
 	ServerAddr       string
+	SecretKey        string
 	PostgresUser     string
 	PostgresPasswrod string
 	PostgresHost     string
@@ -22,6 +23,7 @@ func LoadConfig() {
 	viper.AutomaticEnv()
 	AppConfig = &Config{
 		ServerAddr:       viper.GetString("SERVER_ADDR"),
+		SecretKey:        viper.GetString("SECRET_KEY"),
 		PostgresUser:     viper.GetString("DB_APP_USER"),
 		PostgresPasswrod: viper.GetString("DB_APP_PASSWORD"),
 		PostgresHost:     viper.GetString("POSTGRES_HOST"),
