@@ -51,6 +51,9 @@ func (w *WebApp) routes() {
 
 	r.Use(echojwt.WithConfig(config))
 
+	a := w.e.Group("/auth")
+	a.POST("/login", w.login)
+	a.POST("/signup", w.signup)
+
 	w.e.GET("/healthz", w.healthz)
-	w.e.POST("/login", w.login)
 }
