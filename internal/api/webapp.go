@@ -30,6 +30,7 @@ func NewWebApp(
 
 func (w *WebApp) Start() error {
 	w.e.Use(middleware.Recover())
+	w.e.Use(middleware.Logger())
 	return w.e.Start(w.addr)
 }
 
