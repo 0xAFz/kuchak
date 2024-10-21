@@ -9,7 +9,7 @@ import (
 
 func (w *WebApp) healthz(c echo.Context) error {
 	return c.JSON(http.StatusOK, echo.Map{
-		"status": "ok",
+		"message": "ok",
 	})
 }
 
@@ -19,9 +19,13 @@ func (w *WebApp) login(c echo.Context) error {
 		return c.JSON(
 			http.StatusBadRequest,
 			echo.Map{
-				"error": "Bad request",
+				"message": "invalid request body",
 			},
 		)
+	}
+
+	if err := c.Validate(userData); err != nil {
+		return err
 	}
 
 	t, err := auth.GenerateJwtToken(userData.Email)
@@ -29,7 +33,7 @@ func (w *WebApp) login(c echo.Context) error {
 		return c.JSON(
 			http.StatusInternalServerError,
 			echo.Map{
-				"error": "Failed to generate jwt token",
+				"message": "failed to generate token",
 			},
 		)
 	}
