@@ -6,7 +6,7 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     CREATE USER $DB_APP_USER WITH PASSWORD '$DB_APP_PASSWORD';
 
     -- Create database
-    CREATE DATABASE $DB_APP_USER;
+    -- CREATE DATABASE $DB_APP_USER;
 EOSQL
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DB_APP_USER" <<-EOSQL

@@ -2,10 +2,12 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"kuchak/internal/entity"
 	"log"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -26,7 +28,10 @@ func (a *AccountPostgresRepository) ByID(ctx context.Context, ID int) (entity.Us
 	var user entity.User
 	err := a.session.QueryRow(ctx, query, ID).Scan(&user.ID, &user.Email, &user.Password, &user.CreatedAt)
 	if err != nil {
-		return entity.User{}, fmt.Errorf("failed to get user by id %d: %w", ID, err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.User{}, fmt.Errorf("user not found: %w", pgx.ErrNoRows)
+		}
+		return entity.User{}, fmt.Errorf("db query failed: %w", err)
 	}
 
 	return user, nil
@@ -34,10 +39,14 @@ func (a *AccountPostgresRepository) ByID(ctx context.Context, ID int) (entity.Us
 
 func (a *AccountPostgresRepository) ByEmail(ctx context.Context, email string) (entity.User, error) {
 	query := `SELECT id, email, password, created_at FROM users WHERE email = $1`
+
 	var user entity.User
 	err := a.session.QueryRow(ctx, query, email).Scan(&user.ID, &user.Email, &user.Password, &user.CreatedAt)
 	if err != nil {
-		return entity.User{}, fmt.Errorf("failed to get user by email %s: %w", email, err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.User{}, fmt.Errorf("user not found: %w", pgx.ErrNoRows)
+		}
+		return entity.User{}, fmt.Errorf("db query failed: %w", err)
 	}
 
 	return user, nil
