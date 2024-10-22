@@ -1,33 +1,49 @@
 package auth
 
 import (
-	"kuchak/internal/config"
+	"errors"
+	"kuchak/internal/entity"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-type JwtClaims struct {
-	Email string `json:"email"`
-	Admin bool   `json:"admin"`
+const (
+	AccessTokenExp  = time.Hour * 24     // 24 hours
+	RefreshTokenExp = time.Hour * 24 * 7 // 7 days
+)
+
+type Claims struct {
+	UserID int    `json:"user_id"`
+	Email  string `json:"email"`
 	jwt.RegisteredClaims
 }
 
-func GenerateJwtToken(email string) (string, error) {
-	claims := &JwtClaims{
-		email,
-		false,
-		jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 72)),
+func GenerateToken(user entity.User, secret string, expiration time.Duration) (string, error) {
+	claims := &Claims{
+		UserID: user.ID,
+		Email:  user.Email,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiration)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			NotBefore: jwt.NewNumericDate(time.Now()),
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(secret))
+}
 
-	t, err := token.SignedString([]byte(config.AppConfig.SecretKey))
-	if err != nil {
-		return "", err
+func ValidateToken(tokenStr, secret string) (*Claims, error) {
+	claims := &Claims{}
+
+	t, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(secret), nil
+	})
+
+	if err != nil || !t.Valid {
+		return nil, errors.New("invalid token")
 	}
 
-	return t, nil
+	return claims, nil
 }

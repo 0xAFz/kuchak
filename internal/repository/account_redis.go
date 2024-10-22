@@ -24,7 +24,7 @@ func (a *AccountRedisRepository) SaveVerifyToken(ctx context.Context, email, tok
 
 	err := a.client.Do(ctx, cmd).Error()
 	if err != nil {
-		return fmt.Errorf("failed to set token into redis")
+		return fmt.Errorf("failed to set token into redis: %w", err)
 	}
 
 	return nil
@@ -37,7 +37,7 @@ func (a *AccountRedisRepository) ByToken(ctx context.Context, token string) (str
 	result, err := a.client.Do(ctx, cmd).ToString()
 	if err != nil {
 		if rueidis.IsRedisNil(err) {
-			return "", fmt.Errorf("token not found or expired")
+			return "", fmt.Errorf("token is not valid or expierd: %w", err)
 		}
 		return "", fmt.Errorf("failed to get token from redis: %w", err)
 	}

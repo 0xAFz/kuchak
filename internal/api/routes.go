@@ -7,8 +7,6 @@ import (
 	"net/http"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/golang-jwt/jwt/v5"
-	echojwt "github.com/labstack/echo-jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
@@ -37,23 +35,32 @@ func (w *WebApp) routes() {
 		AllowCredentials: true,
 	}))
 
-	config := echojwt.Config{
-		NewClaimsFunc: func(c echo.Context) jwt.Claims {
-			return new(auth.JwtClaims)
-		},
-		SigningKey: []byte(config.AppConfig.SecretKey),
-	}
-
-	r := w.e.Group("/restricted")
-	r.GET("/", func(c echo.Context) error {
-		return c.String(http.StatusOK, "OK\n")
-	})
-
-	r.Use(echojwt.WithConfig(config))
-
 	a := w.e.Group("/auth")
 	a.POST("/login", w.login)
-	a.POST("/signup", w.signup)
+	a.POST("/register", w.register)
+	a.POST("/refresh", w.refreshToken)
+	a.POST("/updateEmail", w.updateEmail, w.authMiddleware)
+	a.POST("/updatePassword", w.updatePassword, w.authMiddleware)
+	a.GET("/verify/:token", w.verifyEmail)
 
 	w.e.GET("/healthz", w.healthz)
+}
+
+func (w *WebApp) authMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		authHeader := c.Request().Header.Get("Authorization")
+		if authHeader == "" {
+			return echo.NewHTTPError(http.StatusUnauthorized, "missing authorization header")
+		}
+
+		tokenStr := authHeader[len("Bearer "):]
+
+		claims, err := auth.ValidateToken(tokenStr, config.AppConfig.AccessTokenSecret)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusUnauthorized, "invalid token")
+		}
+
+		c.Set("user", claims)
+		return next(c)
+	}
 }
