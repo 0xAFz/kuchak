@@ -11,6 +11,9 @@ type Account interface {
 	ByEmail(ctx context.Context, email string) (entity.User, error)
 	Save(ctx context.Context, user entity.User) error
 	Delete(ctx context.Context, user entity.User) error
+	UpdateEmail(ctx context.Context, user entity.User) error
+	UpdatePassword(ctx context.Context, user entity.User) error
+	UpdateVerifyEmail(ctx context.Context, user entity.User) error
 }
 
 type URL interface {

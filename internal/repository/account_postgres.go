@@ -76,3 +76,42 @@ func (a *AccountPostgresRepository) Delete(ctx context.Context, user entity.User
 
 	return nil
 }
+
+func (a *AccountPostgresRepository) UpdateEmail(ctx context.Context, user entity.User) error {
+	query := `UPDATE users
+			  SET email = $1
+			  WHERE id = $2`
+
+	_, err := a.session.Exec(ctx, query, user.Email, user.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update email %v, %w", user, err)
+	}
+
+	return nil
+}
+
+func (a *AccountPostgresRepository) UpdatePassword(ctx context.Context, user entity.User) error {
+	query := `UPDATE users
+			  SET password = $1
+			  WHERE id = $2`
+
+	_, err := a.session.Exec(ctx, query, user.Password, user.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update password %v, %w", user, err)
+	}
+
+	return nil
+}
+
+func (a *AccountPostgresRepository) UpdateVerifyEmail(ctx context.Context, user entity.User) error {
+	query := `UPDATE users
+			  SET is_verified_email = $1
+			  WHERE id = $2`
+
+	_, err := a.session.Exec(ctx, query, user.IsEmailVerified, user.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update email verify state %v, %w", user, err)
+	}
+
+	return nil
+}
