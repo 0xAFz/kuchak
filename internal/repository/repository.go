@@ -33,3 +33,7 @@ type URLRedis interface {
 	ByShortURL(ctx context.Context, shortURL string) (entity.URL, error)
 	Save(ctx context.Context, url entity.URL) error
 }
+
+type RateLimiter interface {
+	IsAllowed(ctx context.Context, ip string, limit int, window time.Duration) (bool, int, time.Time, error)
+}

@@ -5,6 +5,8 @@ import (
 	"kuchak/pkg/auth"
 	"kuchak/pkg/validate"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
@@ -36,31 +38,57 @@ func (w *WebApp) routes() {
 	}))
 
 	a := w.e.Group("/auth")
+	a.Use(w.rateLimit(20, time.Hour*2))
 	a.POST("/login", w.login)
 	a.POST("/register", w.register)
 	a.POST("/refresh", w.refreshToken)
-	a.POST("/updateEmail", w.updateEmail, w.authMiddleware)
-	a.POST("/updatePassword", w.updatePassword, w.authMiddleware)
+	a.POST("/updateEmail", w.updateEmail, w.withAuth())
+	a.POST("/updatePassword", w.updatePassword, w.withAuth())
 	a.GET("/verify/:token", w.verifyEmail)
 
 	w.e.GET("/healthz", w.healthz)
 }
 
-func (w *WebApp) authMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		authHeader := c.Request().Header.Get("Authorization")
-		if authHeader == "" {
-			return echo.NewHTTPError(http.StatusUnauthorized, "missing authorization header")
+func (w *WebApp) withAuth() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			authHeader := c.Request().Header.Get("Authorization")
+			if authHeader == "" {
+				return echo.NewHTTPError(http.StatusUnauthorized, "missing authorization header")
+			}
+
+			tokenStr := authHeader[len("Bearer "):]
+
+			claims, err := auth.ValidateToken(tokenStr, config.AppConfig.AccessTokenSecret)
+			if err != nil {
+				return echo.NewHTTPError(http.StatusUnauthorized, "invalid token")
+			}
+
+			c.Set("user", claims)
+			return next(c)
 		}
+	}
+}
 
-		tokenStr := authHeader[len("Bearer "):]
+func (w *WebApp) rateLimit(limit int, window time.Duration) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			ip := c.RealIP()
 
-		claims, err := auth.ValidateToken(tokenStr, config.AppConfig.AccessTokenSecret)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusUnauthorized, "invalid token")
+			allowed, remaining, reset, err := w.App.RateLimit.IsAllowed(c.Request().Context(), ip, limit, window)
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, "rate limit check failed")
+			}
+
+			c.Response().Header().Set("X-RateLimit-Limit", strconv.Itoa(limit))
+			c.Response().Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
+			c.Response().Header().Set("X-RateLimit-Reset", strconv.FormatInt(reset.Unix(), 10))
+
+			if !allowed {
+				return echo.NewHTTPError(http.StatusTooManyRequests, "too many requests")
+			}
+
+			return next(c)
 		}
-
-		c.Set("user", claims)
-		return next(c)
 	}
 }

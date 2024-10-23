@@ -39,12 +39,14 @@ func Serve() {
 	URLPostgresRepository := repository.NewURLPostgresRepository(pgxSession)
 	accountPostgresRepository := repository.NewAccountPostgresRepository(pgxSession)
 	accountRedisRepository := repository.NewAccountRedisRepository(redisClient)
+	rateLimitRepository := repository.NewRateLimiterRepository(redisClient)
 
 	app := service.NewApp(
 		service.NewAccountPostgresService(accountPostgresRepository),
 		service.NewURLPostgresService(URLPostgresRepository),
 		service.NewAccountRedisService(accountRedisRepository),
 		service.NewURLRedisService(URLRedisRepository),
+		service.NewRateLimitService(rateLimitRepository),
 	)
 
 	wa := api.NewWebApp(config.AppConfig.ServerAddr, app)
