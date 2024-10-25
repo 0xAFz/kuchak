@@ -189,7 +189,7 @@ func (w *WebApp) register(c echo.Context) error {
 func (w *WebApp) verifyEmail(c echo.Context) error {
 	token := c.Param("token")
 
-	email, err := w.App.AccountRedis.GetByToken(c.Request().Context(), token)
+	email, err := w.App.AccountRedis.GetByEmailVerifyToken(c.Request().Context(), token)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		if errors.Is(err, rueidis.Nil) {
@@ -251,7 +251,7 @@ func (w *WebApp) verifyEmail(c echo.Context) error {
 func (w *WebApp) updateEmail(c echo.Context) error {
 	user := c.Get("user").(*auth.Claims)
 
-	var updateEmailData UpdateEmailData
+	var updateEmailData EmailData
 	if err := c.Bind(&updateEmailData); err != nil {
 		fmt.Printf("error: %v\n", err)
 		return c.JSON(
@@ -268,8 +268,9 @@ func (w *WebApp) updateEmail(c echo.Context) error {
 	}
 
 	updatedUser := entity.User{
-		ID:    user.UserID,
-		Email: updateEmailData.Email,
+		ID:              user.UserID,
+		Email:           updateEmailData.Email,
+		IsEmailVerified: false,
 	}
 
 	if err := w.App.AccountPostgres.UpdateUserEmail(c.Request().Context(), updatedUser); err != nil {
@@ -379,4 +380,184 @@ func (w *WebApp) updatePassword(c echo.Context) error {
 		},
 	)
 
+}
+
+func (w *WebApp) requestResetPassword(c echo.Context) error {
+	var emailData EmailData
+	if err := c.Bind(&emailData); err != nil {
+		fmt.Printf("error: %v\n", err)
+		return c.JSON(
+			http.StatusBadRequest,
+			echo.Map{
+				"message": "invalid request body",
+			},
+		)
+	}
+
+	if err := c.Validate(emailData); err != nil {
+		fmt.Printf("error: %v\n", err)
+		return err
+	}
+
+	resp, err := w.App.AccountRedis.GetByResetPasswordEmail(c.Request().Context(), emailData.Email)
+	if err != nil && rueidis.IsRedisNil(err) {
+		fmt.Printf("error: %v\n", err)
+		return c.JSON(
+			http.StatusInternalServerError,
+			echo.Map{
+				"message": "reset password failed",
+			},
+		)
+	}
+
+	if err == nil && resp != "" {
+		return c.JSON(
+			http.StatusConflict,
+			echo.Map{
+				"message": "reset password already sent",
+			},
+		)
+	}
+
+	_, err = w.App.AccountPostgres.GetUserByEmail(c.Request().Context(), emailData.Email)
+
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return c.JSON(
+				http.StatusBadRequest,
+				echo.Map{
+					"message": "user not found",
+				},
+			)
+		}
+		return c.JSON(
+			http.StatusInternalServerError,
+			echo.Map{
+				"message": "failed to get user",
+			},
+		)
+	}
+
+	// sendEmail(...)
+
+	token, err := auth.GenerateRandomToken(32)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		return c.JSON(http.StatusInternalServerError, echo.Map{
+			"message": "failed to generate reset token",
+		})
+	}
+
+	if err := w.App.AccountRedis.SetResetPassword(c.Request().Context(), emailData.Email, token); err != nil {
+		fmt.Printf("error: %v\n", err)
+		return c.JSON(
+			http.StatusInternalServerError,
+			echo.Map{
+				"message": "failed reset password",
+			},
+		)
+	}
+
+	return c.JSON(
+		http.StatusOK,
+		echo.Map{
+			"message": "reset password email successfully sent",
+		},
+	)
+}
+
+func (w *WebApp) resetPassword(c echo.Context) error {
+	var resetPasswordData ResetPasswordData
+	if err := c.Bind(&resetPasswordData); err != nil {
+		fmt.Printf("error: %v\n", err)
+		return c.JSON(
+			http.StatusBadRequest,
+			echo.Map{
+				"message": "invalid request body",
+			},
+		)
+	}
+
+	if err := c.Validate(resetPasswordData); err != nil {
+		fmt.Printf("error: %v\n", err)
+		return err
+	}
+
+	if strings.Compare(resetPasswordData.Password, resetPasswordData.PasswordRepeat) != 0 {
+		return c.JSON(
+			http.StatusBadRequest,
+			echo.Map{
+				"message": "passwords is not match",
+			},
+		)
+	}
+
+	userEmail, err := w.App.AccountRedis.GetByResetPasswordToken(c.Request().Context(), resetPasswordData.Token)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		if rueidis.IsRedisNil(err) {
+			return c.JSON(
+				http.StatusBadRequest,
+				echo.Map{
+					"message": "token is not valid or expired",
+				},
+			)
+		}
+		return c.JSON(
+			http.StatusInternalServerError,
+			echo.Map{
+				"message": "failed to reset password",
+			},
+		)
+	}
+
+	dbUser, err := w.App.AccountPostgres.GetUserByEmail(c.Request().Context(), userEmail)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return c.JSON(
+				http.StatusNotFound,
+				echo.Map{
+					"message": "user not found",
+				},
+			)
+		}
+		return c.JSON(
+			http.StatusNotFound,
+			echo.Map{
+				"message": "failed to get user",
+			},
+		)
+	}
+
+	hashedPassword, err := auth.PasswordHash(resetPasswordData.Password)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		return c.JSON(
+			http.StatusInternalServerError,
+			echo.Map{
+				"message": "failed to reset password",
+			},
+		)
+	}
+
+	dbUser.Password = hashedPassword
+
+	if err := w.App.AccountPostgres.UpdateUserPassword(c.Request().Context(), dbUser); err != nil {
+		fmt.Printf("error: %v\n", err)
+		return c.JSON(
+			http.StatusInternalServerError,
+			echo.Map{
+				"message": "failed to reset password",
+			},
+		)
+	}
+
+	return c.JSON(
+		http.StatusOK,
+		echo.Map{
+			"message": "password changed successfully",
+		},
+	)
 }

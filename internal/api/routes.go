@@ -42,11 +42,13 @@ func (w *WebApp) routes() {
 	a.POST("/login", w.login)
 	a.POST("/register", w.register)
 	a.POST("/refresh", w.refreshToken)
-	a.POST("/updateEmail", w.updateEmail, w.withAuth())
-	a.POST("/updatePassword", w.updatePassword, w.withAuth())
+	a.POST("/requestResetPassword", w.requestResetPassword)
+	a.POST("/resetPassword", w.resetPassword)
+	a.PATCH("/updateEmail", w.updateEmail, w.withAuth())
+	a.PATCH("/updatePassword", w.updatePassword, w.withAuth())
 	a.GET("/verify/:token", w.verifyEmail)
 
-	w.e.GET("/healthz", w.healthz)
+	w.e.GET("/healthz", w.healthz, w.rateLimit(2, time.Hour*1))
 }
 
 func (w *WebApp) withAuth() echo.MiddlewareFunc {

@@ -79,7 +79,7 @@ func (a *AccountPostgresRepository) Delete(ctx context.Context, user entity.User
 
 func (a *AccountPostgresRepository) UpdateEmail(ctx context.Context, user entity.User) error {
 	query := `UPDATE users
-			  SET email = $1
+			  SET email = $1, is_email_verifed = false
 			  WHERE id = $2`
 
 	_, err := a.session.Exec(ctx, query, user.Email, user.ID)
