@@ -25,8 +25,11 @@ type URL interface {
 }
 
 type AccountRedis interface {
-	ByToken(ctx context.Context, token string) (string, error)
+	ByVerifyToken(ctx context.Context, token string) (string, error)
 	SaveVerifyToken(ctx context.Context, email, token string, ttl time.Duration) error
+	ByResetPasswordToken(ctx context.Context, token string) (string, error)
+	ByResetPasswordEmail(ctx context.Context, email string) (string, error)
+	SaveResetPassword(ctx context.Context, email, token string, ttl time.Duration) error
 }
 
 type URLRedis interface {

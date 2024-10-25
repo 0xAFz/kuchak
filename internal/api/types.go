@@ -17,7 +17,13 @@ type UpdatePasswordData struct {
 	PasswordRepeat string `json:"password_repeat" validate:"required,password"`
 }
 
-type UpdateEmailData struct {
+type ResetPasswordData struct {
+	Token          string `json:"token" validate:"required"`
+	Password       string `json:"password" validate:"required,password"`
+	PasswordRepeat string `json:"password_repeat" validate:"required,password"`
+}
+
+type EmailData struct {
 	Email string `json:"email" validate:"required,email"`
 }
 
