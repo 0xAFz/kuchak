@@ -18,6 +18,7 @@ type Config struct {
 	SmtpPort           string
 	SmtpUsername       string
 	SmtpPassword       string
+	AppURL             string
 }
 
 var AppConfig *Config
@@ -40,5 +41,6 @@ func LoadConfig() {
 		SmtpPort:           viper.GetString("SMTP_PORT"),
 		SmtpUsername:       viper.GetString("SMTP_USERNAME"),
 		SmtpPassword:       viper.GetString("SMTP_PASSWORD"),
+		AppURL:             viper.GetString("APP_URL"),
 	}
 }

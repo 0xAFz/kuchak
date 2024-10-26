@@ -57,6 +57,15 @@ func (w *WebApp) login(c echo.Context) error {
 		)
 	}
 
+	if !dbUser.IsEmailVerified {
+		return c.JSON(
+			http.StatusUnauthorized,
+			echo.Map{
+				"message": "email not verified",
+			},
+		)
+	}
+
 	if err := auth.PasswordVerify(dbUser.Password, loginUserData.Password); err != nil {
 		fmt.Printf("error: %v\n", err)
 		return c.JSON(
@@ -251,7 +260,7 @@ func (w *WebApp) requestVerifyEmail(c echo.Context) error {
 		})
 	}
 
-	verifyEmailURL := fmt.Sprintf("https://ajorcloud.ir/auth/verifyEmail/%s", token)
+	verifyEmailURL := fmt.Sprintf("%s/auth/verifyEmail/%s", w.appURL, token)
 
 	if err := w.App.EmailSender.SendVerificationEmail(emailData.Email, verifyEmailURL); err != nil {
 		fmt.Printf("error: %v\n", err)
@@ -539,7 +548,7 @@ func (w *WebApp) requestResetPassword(c echo.Context) error {
 		})
 	}
 
-	resetPasswordURL := fmt.Sprintf("https://ajorcloud.ir/auth/resetPassword/%s", token)
+	resetPasswordURL := fmt.Sprintf("%s/auth/resetPassword/%s", w.appURL, token)
 
 	if err := w.App.EmailSender.SendResetPasswordEmail(emailData.Email, resetPasswordURL); err != nil {
 		fmt.Printf("error: %v\n", err)

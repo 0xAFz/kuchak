@@ -50,7 +50,7 @@ func Serve() {
 		service.NewEmailService(config.AppConfig.SmtpHost, config.AppConfig.SmtpPort, config.AppConfig.SmtpUsername, config.AppConfig.SmtpPassword, config.AppConfig.SmtpUsername),
 	)
 
-	wa := api.NewWebApp(config.AppConfig.ServerAddr, app)
+	wa := api.NewWebApp(config.AppConfig.ServerAddr, config.AppConfig.AppURL, app)
 
 	go func() {
 		log.Fatal(wa.Start())
