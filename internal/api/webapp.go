@@ -9,20 +9,23 @@ import (
 )
 
 type WebApp struct {
-	addr string
-	App  *service.App
-	e    *echo.Echo
+	addr   string
+	appURL string
+	App    *service.App
+	e      *echo.Echo
 }
 
 func NewWebApp(
 	addr string,
+	appURL string,
 	app *service.App,
 ) *WebApp {
 	e := echo.New()
 	wa := &WebApp{
-		App:  app,
-		e:    e,
-		addr: addr,
+		App:    app,
+		e:      e,
+		addr:   addr,
+		appURL: appURL,
 	}
 	wa.routes()
 	return wa
