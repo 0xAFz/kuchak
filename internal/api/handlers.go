@@ -186,10 +186,102 @@ func (w *WebApp) register(c echo.Context) error {
 	)
 }
 
+func (w *WebApp) requestVerifyEmail(c echo.Context) error {
+	var emailData EmailData
+	if err := c.Bind(&emailData); err != nil {
+		fmt.Printf("error: %v\n", err)
+		return c.JSON(
+			http.StatusBadRequest,
+			echo.Map{
+				"message": "invalid request body",
+			},
+		)
+	}
+
+	if err := c.Validate(emailData); err != nil {
+		fmt.Printf("error: %v\n", err)
+		return err
+	}
+
+	resp, err := w.App.AccountRedis.GetByVerifyEmail(c.Request().Context(), emailData.Email)
+	if err != nil && rueidis.IsRedisNil(err) {
+		fmt.Printf("error: %v\n", err)
+		return c.JSON(
+			http.StatusInternalServerError,
+			echo.Map{
+				"message": "email verification failed",
+			},
+		)
+	}
+
+	if err == nil && resp != "" {
+		return c.JSON(
+			http.StatusConflict,
+			echo.Map{
+				"message": "email verification already sent",
+			},
+		)
+	}
+
+	_, err = w.App.AccountPostgres.GetUserByEmail(c.Request().Context(), emailData.Email)
+
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return c.JSON(
+				http.StatusBadRequest,
+				echo.Map{
+					"message": "user not found",
+				},
+			)
+		}
+		return c.JSON(
+			http.StatusInternalServerError,
+			echo.Map{
+				"message": "failed to get user",
+			},
+		)
+	}
+
+	token, err := auth.GenerateRandomToken(32)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		return c.JSON(http.StatusInternalServerError, echo.Map{
+			"message": "failed to generate verify token",
+		})
+	}
+
+	verifyEmailURL := fmt.Sprintf("https://ajorcloud.ir/auth/verifyEmail/%s", token)
+
+	if err := w.App.EmailSender.SendVerificationEmail(emailData.Email, verifyEmailURL); err != nil {
+		fmt.Printf("error: %v\n", err)
+		return c.JSON(http.StatusInternalServerError, echo.Map{
+			"message": "failed to send email verification url",
+		})
+	}
+
+	if err := w.App.AccountRedis.SetEmailVerify(c.Request().Context(), emailData.Email, token); err != nil {
+		fmt.Printf("error: %v\n", err)
+		return c.JSON(
+			http.StatusInternalServerError,
+			echo.Map{
+				"message": "email verification failed",
+			},
+		)
+	}
+
+	return c.JSON(
+		http.StatusOK,
+		echo.Map{
+			"message": "verification email successfully sent",
+		},
+	)
+}
+
 func (w *WebApp) verifyEmail(c echo.Context) error {
 	token := c.Param("token")
 
-	email, err := w.App.AccountRedis.GetByEmailVerifyToken(c.Request().Context(), token)
+	email, err := w.App.AccountRedis.GetByVerifyToken(c.Request().Context(), token)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		if errors.Is(err, rueidis.Nil) {
@@ -439,13 +531,20 @@ func (w *WebApp) requestResetPassword(c echo.Context) error {
 		)
 	}
 
-	// sendEmail(...)
-
 	token, err := auth.GenerateRandomToken(32)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		return c.JSON(http.StatusInternalServerError, echo.Map{
 			"message": "failed to generate reset token",
+		})
+	}
+
+	resetPasswordURL := fmt.Sprintf("https://ajorcloud.ir/auth/resetPassword/%s", token)
+
+	if err := w.App.EmailSender.SendResetPasswordEmail(emailData.Email, resetPasswordURL); err != nil {
+		fmt.Printf("error: %v\n", err)
+		return c.JSON(http.StatusInternalServerError, echo.Map{
+			"message": "failed to send reset password url",
 		})
 	}
 

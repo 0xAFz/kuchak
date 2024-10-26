@@ -46,7 +46,8 @@ func (w *WebApp) routes() {
 	a.POST("/resetPassword", w.resetPassword)
 	a.PATCH("/updateEmail", w.updateEmail, w.withAuth())
 	a.PATCH("/updatePassword", w.updatePassword, w.withAuth())
-	a.GET("/verify/:token", w.verifyEmail)
+	a.POST("/requestVerifyEmail", w.requestVerifyEmail)
+	a.GET("/verifyEmail/:token", w.verifyEmail)
 
 	w.e.GET("/healthz", w.healthz, w.rateLimit(2, time.Hour*1))
 }

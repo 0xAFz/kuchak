@@ -14,22 +14,26 @@ func NewAccountRedisService(repo repository.AccountRedis) *AccountRedisService {
 	return &AccountRedisService{repo: repo}
 }
 
-func (a *AccountRedisService) SetEmailVerifyToken(ctx context.Context, email, token string) error {
-	return a.repo.SaveVerifyToken(ctx, email, token, time.Minute*5)
+func (a *AccountRedisService) SetEmailVerify(ctx context.Context, email, token string) error {
+	return a.repo.SaveVerify(ctx, email, token, time.Minute*5)
 }
 
-func (a *AccountRedisService) GetByEmailVerifyToken(ctx context.Context, token string) (string, error) {
+func (a *AccountRedisService) GetByVerifyToken(ctx context.Context, token string) (string, error) {
+	return a.repo.ByVerifyToken(ctx, token)
+}
+
+func (a *AccountRedisService) GetByVerifyEmail(ctx context.Context, token string) (string, error) {
 	return a.repo.ByVerifyToken(ctx, token)
 }
 
 func (a *AccountRedisService) SetResetPassword(ctx context.Context, email, token string) error {
-	return a.repo.SaveResetPassword(ctx, email, token, time.Minute*5)
+	return a.repo.SaveReset(ctx, email, token, time.Minute*5)
 }
 
 func (a *AccountRedisService) GetByResetPasswordToken(ctx context.Context, token string) (string, error) {
-	return a.repo.ByResetPasswordToken(ctx, token)
+	return a.repo.ByResetToken(ctx, token)
 }
 
 func (a *AccountRedisService) GetByResetPasswordEmail(ctx context.Context, email string) (string, error) {
-	return a.repo.ByResetPasswordEmail(ctx, email)
+	return a.repo.ByResetEmail(ctx, email)
 }
