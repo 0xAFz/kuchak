@@ -6,6 +6,7 @@ type App struct {
 	AccountRedis    *AccountRedisService
 	URLRedis        *URLRedisService
 	RateLimit       *RateLimitService
+	EmailSender     *EmailService
 }
 
 func NewApp(
@@ -14,6 +15,7 @@ func NewApp(
 	AccountRedis *AccountRedisService,
 	URLRedis *URLRedisService,
 	RateLimit *RateLimitService,
+	EmailSender *EmailService,
 ) *App {
-	return &App{AccountPostgres: AccountPostgres, URLPostgres: URLPostgres, AccountRedis: AccountRedis, URLRedis: URLRedis, RateLimit: RateLimit}
+	return &App{AccountPostgres: AccountPostgres, URLPostgres: URLPostgres, AccountRedis: AccountRedis, URLRedis: URLRedis, RateLimit: RateLimit, EmailSender: EmailSender}
 }

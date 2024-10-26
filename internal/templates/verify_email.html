@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Email</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background-color: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            border-radius: 5px;
+        }
+
+        .content {
+            padding: 20px;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            font-size: 12px;
+            color: #666666;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Email Verification</h1>
+        </div>
+        <div class="content">
+            <h2>Hello,</h2>
+            <p>Please verify your email using this URL:</p>
+
+            <div style="text-align: center;">
+                <a href="{{.URL}}" class="button">Verify Email Address</a>
+            </div>
+
+            <p>This URL will expire in 5 minutes.</p>
+
+            <p>If you didn't request this verification, you can ignore this email.</p>
+        </div>
+        <div class="footer">
+            <p>This is an automated email. <br/>Please do not reply to this message.</p>
+            <p>&copy; 2024 Kuchak. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+
+</html>
