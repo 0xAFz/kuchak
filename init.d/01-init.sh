@@ -25,7 +25,6 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DB_APP_USER" <<-E
         original_url TEXT NOT NULL,
         user_id INT REFERENCES users(id) ON DELETE CASCADE,
         click_count INT DEFAULT 0,
-        expiry_date TIMESTAMP WITH TIME ZONE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
     );
 

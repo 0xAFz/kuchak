@@ -49,7 +49,16 @@ func (w *WebApp) routes() {
 	a.POST("/requestVerifyEmail", w.requestVerifyEmail)
 	a.GET("/verifyEmail/:token", w.verifyEmail)
 
+	u := w.e.Group("/urls")
+	u.Use(w.rateLimit(100, time.Hour*2))
+	u.Use(w.withAuth())
+	u.GET("/get/:shortURL", w.getURL)
+	u.GET("/getAll", w.getAllURLs)
+	u.POST("/create", w.createURL)
+	u.DELETE("/delete/:shortURL", w.deleteURL)
+
 	w.e.GET("/healthz", w.healthz, w.rateLimit(2, time.Hour*1))
+	w.e.GET("/:shortURL", w.redirectURL)
 }
 
 func (w *WebApp) withAuth() echo.MiddlewareFunc {

@@ -19,6 +19,7 @@ type Account interface {
 type URL interface {
 	ByID(ctx context.Context, ID int) (entity.URL, error)
 	ByShortURL(ctx context.Context, shortURL string) (entity.URL, error)
+	ByUserID(ctx context.Context, userID int) ([]entity.URL, error)
 	Save(ctx context.Context, url entity.URL) error
 	UpdateClickCount(ctx context.Context, shortURL string) error
 	Delete(ctx context.Context, url entity.URL) error

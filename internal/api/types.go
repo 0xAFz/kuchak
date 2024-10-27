@@ -1,33 +1,37 @@
 package api
 
-type LoginUserData struct {
+type LoginRequest struct {
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required,password"`
 }
 
-type RegisterUserData struct {
+type RegisterRequest struct {
 	Email          string `json:"email" validate:"required,email"`
 	Password       string `json:"password" validate:"required,password"`
 	PasswordRepeat string `json:"password_repeat" validate:"required,password"`
 }
 
-type UpdatePasswordData struct {
+type PasswordUpdateRequest struct {
 	OldPassword    string `json:"old_password" validate:"required,password"`
 	Password       string `json:"password" validate:"required,password"`
 	PasswordRepeat string `json:"password_repeat" validate:"required,password"`
 }
 
-type ResetPasswordData struct {
+type PasswordResetRequest struct {
 	Token          string `json:"token" validate:"required"`
 	Password       string `json:"password" validate:"required,password"`
 	PasswordRepeat string `json:"password_repeat" validate:"required,password"`
 }
 
-type EmailData struct {
+type EmailRequest struct {
 	Email string `json:"email" validate:"required,email"`
 }
 
-type TokenResponse struct {
+type AuthTokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
+}
+
+type URLRequest struct {
+	OriginalURL string `json:"original_url"`
 }

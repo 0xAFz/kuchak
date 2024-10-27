@@ -21,12 +21,12 @@ func NewURLPostgresRepository(session *pgxpool.Pool) *URLPostgresRepository {
 }
 
 func (u *URLPostgresRepository) ByID(ctx context.Context, ID int) (entity.URL, error) {
-	query := `SELECT (id, short_url, original_url, user_id, click_count, expiry_date, created_at)
+	query := `SELECT id, short_url, original_url, user_id, click_count, created_at
 			  FROM urls
 			  WHERE id = $1`
 
 	var url entity.URL
-	err := u.session.QueryRow(ctx, query, ID).Scan(&url.ID, &url.ShortURL, &url.OriginalURL, &url.UserID, &url.ClickCount, &url.ExpiryDate, &url.CreatedAt)
+	err := u.session.QueryRow(ctx, query, ID).Scan(&url.ID, &url.ShortURL, &url.OriginalURL, &url.UserID, &url.ClickCount, &url.CreatedAt)
 	if err != nil {
 		return entity.URL{}, fmt.Errorf("failed to get url: %v", err)
 	}
@@ -35,12 +35,12 @@ func (u *URLPostgresRepository) ByID(ctx context.Context, ID int) (entity.URL, e
 }
 
 func (u *URLPostgresRepository) ByShortURL(ctx context.Context, shortURL string) (entity.URL, error) {
-	query := `SELECT (id, short_url, original_url, user_id, click_count, expiry_date, created_at)
+	query := `SELECT id, short_url, original_url, user_id, click_count, created_at
 			  FROM urls
 			  WHERE short_url = $1`
 
 	var url entity.URL
-	err := u.session.QueryRow(ctx, query, shortURL).Scan(&url.ID, &url.ShortURL, &url.OriginalURL, &url.UserID, &url.ClickCount, &url.ExpiryDate, &url.CreatedAt)
+	err := u.session.QueryRow(ctx, query, shortURL).Scan(&url.ID, &url.ShortURL, &url.OriginalURL, &url.UserID, &url.ClickCount, &url.CreatedAt)
 	if err != nil {
 		return entity.URL{}, fmt.Errorf("failed to get url: %v", err)
 	}
@@ -48,9 +48,37 @@ func (u *URLPostgresRepository) ByShortURL(ctx context.Context, shortURL string)
 	return url, nil
 }
 
+func (u *URLPostgresRepository) ByUserID(ctx context.Context, userID int) ([]entity.URL, error) {
+	query := `SELECT id, short_url, original_url, user_id, click_count, created_at
+			  FROM urls
+			  WHERE user_id = $1`
+
+	var urls []entity.URL
+
+	rows, err := u.session.Query(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get urls: %v", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var url entity.URL
+		if err := rows.Scan(&url.ID, &url.ShortURL, &url.OriginalURL, &url.UserID, &url.ClickCount, &url.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan url row: %v", err)
+		}
+		urls = append(urls, url)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %v", err)
+	}
+
+	return urls, nil
+}
+
 func (u *URLPostgresRepository) Save(ctx context.Context, url entity.URL) error {
-	query := `INSERT INTO urls (short_url, original_url, user_id, expiry_date)
-			  VALUES ($1, $2, $3, $4)
+	query := `INSERT INTO urls (short_url, original_url, user_id)
+			  VALUES ($1, $2, $3)
 			  ON CONFLICT (short_url) DO NOTHING`
 
 	tx, err := u.session.Begin(ctx)
@@ -60,7 +88,7 @@ func (u *URLPostgresRepository) Save(ctx context.Context, url entity.URL) error 
 
 	defer tx.Rollback(ctx)
 
-	_, err = tx.Exec(ctx, query, url.ShortURL, url.OriginalURL, url.UserID, url.ExpiryDate)
+	_, err = tx.Exec(ctx, query, url.ShortURL, url.OriginalURL, url.UserID)
 	if err != nil {
 		return fmt.Errorf("failed to create new url: %w", err)
 	}
