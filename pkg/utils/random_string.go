@@ -1,6 +1,6 @@
 package utils
 
-import "golang.org/x/exp/rand"
+import "math/rand"
 
 const (
 	length  = 5
