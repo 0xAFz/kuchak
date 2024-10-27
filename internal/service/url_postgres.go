@@ -22,6 +22,10 @@ func (u *URLPostgresService) GetURLByShortURL(ctx context.Context, shortURL stri
 	return u.repo.ByShortURL(ctx, shortURL)
 }
 
+func (u *URLPostgresService) GetURLsByUserID(ctx context.Context, userID int) ([]entity.URL, error) {
+	return u.repo.ByUserID(ctx, userID)
+}
+
 func (u *URLPostgresService) CreateURL(ctx context.Context, url entity.URL) error {
 	return u.repo.Save(ctx, url)
 }
