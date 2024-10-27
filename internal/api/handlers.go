@@ -846,12 +846,14 @@ func (w *WebApp) redirectURL(c echo.Context) error {
 
 	cacheURL, err := w.App.URLRedis.GetFromCacheByShortURL(c.Request().Context(), shortURL)
 	if err == nil {
+		fmt.Printf("redirected to: %s\n", cacheURL.OriginalURL)
 		go func() {
 			if err := w.App.URLPostgres.UpdateURLClickCount(context.Background(), shortURL); err != nil {
 				fmt.Printf("DB error in click update: %v\n", err)
 			}
+			fmt.Printf("%s: click count updated\n", shortURL)
 		}()
-		return c.Redirect(http.StatusPermanentRedirect, cacheURL.OriginalURL)
+		return c.Redirect(http.StatusMovedPermanently, cacheURL.OriginalURL)
 	}
 
 	if !rueidis.IsRedisNil(err) {
@@ -885,7 +887,9 @@ func (w *WebApp) redirectURL(c echo.Context) error {
 		if err := w.App.URLPostgres.UpdateURLClickCount(context.Background(), shortURL); err != nil {
 			fmt.Printf("DB error in click update: %v\n", err)
 		}
+		fmt.Printf("%s: click count updated\n", shortURL)
 	}()
 
-	return c.Redirect(http.StatusPermanentRedirect, dbURL.OriginalURL)
+	fmt.Printf("redirected to: %s\n", dbURL.OriginalURL)
+	return c.Redirect(http.StatusMovedPermanently, dbURL.OriginalURL)
 }
