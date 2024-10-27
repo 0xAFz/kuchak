@@ -699,6 +699,7 @@ func (w *WebApp) createURL(c echo.Context) error {
 			OriginalURL: createURLRequest.OriginalURL,
 			UserID:      user.UserID,
 		}
+		log.Printf("new url generated: %s, %v\n", shortURL, newURL)
 
 		if err = w.App.URLPostgres.CreateURL(c.Request().Context(), newURL); err != nil {
 			fmt.Printf("error: %v", err)
