@@ -11,6 +11,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/rs/zerolog/log"
 )
 
 func (w *WebApp) routes() {
@@ -92,6 +93,7 @@ func (w *WebApp) rateLimit(limit int, window time.Duration) echo.MiddlewareFunc 
 
 			allowed, remaining, reset, err := w.App.RateLimit.IsAllowed(c.Request().Context(), ip, limit, window)
 			if err != nil {
+				log.Err(err).Msg("rate limit check failed")
 				return echo.NewHTTPError(http.StatusInternalServerError, "rate limit check failed")
 			}
 

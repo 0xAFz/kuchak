@@ -8,13 +8,17 @@ import (
 	"kuchak/internal/repository/postgres"
 	"kuchak/internal/repository/redis"
 	"kuchak/internal/service"
-	"log"
 	"os"
 	"os/signal"
 	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 func Serve() {
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+
 	config.LoadConfig()
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -22,17 +26,17 @@ func Serve() {
 
 	pgxSession, err := postgres.NewPostgresSession()
 	if err != nil {
-		log.Fatalf("Failed to connect postgres: %v", err)
+		log.Fatal().Err(err).Msg("failed to connect postgres")
 	}
 
 	err = pgxSession.Ping(context.Background())
 	if err != nil {
-		log.Fatalf("Failed to ping postgres: %v", err)
+		log.Fatal().Err(err).Msg("failed to ping postgres")
 	}
 
 	redisClient, err := redis.NewRedisClient(config.AppConfig.RedisHost)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("failed to connect redis")
 	}
 
 	URLRedisRepository := repository.NewURLRedisRepository(redisClient)
@@ -53,14 +57,14 @@ func Serve() {
 	wa := api.NewWebApp(config.AppConfig.ServerAddr, config.AppConfig.AppURL, app)
 
 	go func() {
-		log.Fatal(wa.Start())
+		log.Fatal().Err(wa.Start())
 	}()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	defer wa.Shutdown(shutdownCtx)
 
-	log.Println("Server is up and running...")
+	log.Info().Msg("Server is up and running...")
 	<-ctx.Done()
-	log.Println("Shutting down the server...")
+	log.Info().Msg("Shutting down the server...")
 }

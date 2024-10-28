@@ -8,106 +8,86 @@ import (
 	"kuchak/internal/entity"
 	"kuchak/pkg/auth"
 	"kuchak/pkg/utils"
-	"log"
 	"net/http"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/labstack/echo/v4"
 	"github.com/redis/rueidis"
+	"github.com/rs/zerolog/log"
 )
 
 func (w *WebApp) healthz(c echo.Context) error {
-	return c.JSON(http.StatusOK, echo.Map{
-		"message": "ok",
-	})
+	return c.JSON(http.StatusOK, echo.Map{"success": true})
 }
 
 func (w *WebApp) login(c echo.Context) error {
 	var loginRequest LoginRequest
 	if err := c.Bind(&loginRequest); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusBadRequest,
-			echo.Map{
-				"message": "invalid request body",
-			},
-		)
+		log.Err(err).Msg("failed to bind request body")
+		return c.JSON(http.StatusBadRequest, ErrMessage{
+			Message: "invalid request body",
+			Success: false,
+		})
 	}
 
 	if err := c.Validate(loginRequest); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return err
+		log.Err(err).Msg("failed to validate payload")
+		return c.JSON(http.StatusBadRequest, ErrMessage{
+			Message: fmt.Sprintf("failed to validate payload: %s", err.Error()),
+			Success: false,
+		})
 	}
 
 	dbUser, err := w.App.AccountPostgres.GetUserByEmail(c.Request().Context(), loginRequest.Email)
-
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return c.JSON(
-				http.StatusNotFound,
-				echo.Map{
-					"message": "user not found",
-				},
-			)
+			return c.JSON(http.StatusNotFound, ErrMessage{
+				Message: "user not found",
+				Success: false,
+			})
 		}
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to get user",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to fetch user",
+			Success: false,
+		})
 	}
 
 	if !dbUser.IsEmailVerified {
-		return c.JSON(
-			http.StatusUnauthorized,
-			echo.Map{
-				"message": "email not verified",
-			},
-		)
+		log.Error().Str("email", dbUser.Email).Msg("email not verified")
+		return c.JSON(http.StatusUnauthorized, ErrMessage{
+			Message: "email not verified",
+			Success: false,
+		})
 	}
 
 	if err := auth.PasswordVerify(dbUser.Password, loginRequest.Password); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusUnauthorized,
-			echo.Map{
-				"message": "incorrect password",
-			},
-		)
+		return c.JSON(http.StatusUnauthorized, ErrMessage{
+			Message: "incorrect password",
+			Success: false,
+		})
 	}
 
 	accessToken, err := auth.GenerateToken(dbUser, config.AppConfig.AccessTokenSecret, auth.AccessTokenExp)
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to generate access token",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to generate access token",
+			Success: false,
+		})
 	}
 
 	refreshToken, err := auth.GenerateToken(dbUser, config.AppConfig.RefreshTokenSecret, auth.RefreshTokenExp)
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to generate refresh token",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to generate refresh token",
+			Success: false,
+		})
 	}
 
-	return c.JSON(
-		http.StatusOK,
-		AuthTokenResponse{
-			AccessToken:  accessToken,
-			RefreshToken: refreshToken,
-		},
-	)
+	return c.JSON(http.StatusOK, AuthTokenResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	})
 }
 
 func (w *WebApp) refreshToken(c echo.Context) error {
@@ -131,7 +111,7 @@ func (w *WebApp) refreshToken(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to generate access token")
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
+	return c.JSON(http.StatusOK, echo.Map{
 		"access_token": newAccessToken,
 	})
 }
@@ -139,38 +119,49 @@ func (w *WebApp) refreshToken(c echo.Context) error {
 func (w *WebApp) register(c echo.Context) error {
 	var registerRequest RegisterRequest
 	if err := c.Bind(&registerRequest); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusBadRequest,
-			echo.Map{
-				"message": "invalid request body",
-			},
-		)
+		log.Err(err).Msg("failed to bind request body")
+		return c.JSON(http.StatusBadRequest, ErrMessage{
+			Message: "invalid request body",
+			Success: false,
+		})
 	}
 
 	if err := c.Validate(registerRequest); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return err
+		log.Err(err).Msg("failed to validate payload")
+		return c.JSON(http.StatusBadRequest, ErrMessage{
+			Message: fmt.Sprintf("failed to validate payload: %s", err.Error()),
+			Success: false,
+		})
 	}
 
-	if strings.Compare(registerRequest.Password, registerRequest.PasswordRepeat) != 0 {
-		return c.JSON(
-			http.StatusBadRequest,
-			echo.Map{
-				"message": "passwords is not match",
-			},
-		)
+	if registerRequest.Password != registerRequest.PasswordRepeat {
+		return c.JSON(http.StatusBadRequest, ErrMessage{
+			Message: "passwords is not match",
+			Success: false,
+		})
+	}
+
+	dbUser, err := w.App.AccountPostgres.GetUserByEmail(c.Request().Context(), registerRequest.Email)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to create user",
+			Success: false,
+		})
+	}
+
+	if dbUser.Email != "" {
+		return c.JSON(http.StatusBadRequest, ErrMessage{
+			Message: "user already exists",
+			Success: false,
+		})
 	}
 
 	hashedPassword, err := auth.PasswordHash(registerRequest.Password)
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to create user",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to create user",
+			Success: false,
+		})
 	}
 
 	newUser := entity.User{
@@ -179,115 +170,95 @@ func (w *WebApp) register(c echo.Context) error {
 	}
 
 	err = w.App.AccountPostgres.CreateUser(c.Request().Context(), newUser)
-
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to create user",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to create user",
+			Success: false,
+		})
 	}
 
-	return c.JSON(
-		http.StatusOK,
-		echo.Map{
-			"message": "user created",
+	return c.JSON(http.StatusOK, ResponseOk{
+		Message: "user created",
+		Success: true,
+		Data: echo.Map{
+			"email": newUser.Email,
 		},
-	)
+	})
 }
 
 func (w *WebApp) requestVerifyEmail(c echo.Context) error {
 	var emailRequest EmailRequest
 	if err := c.Bind(&emailRequest); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusBadRequest,
-			echo.Map{
-				"message": "invalid request body",
-			},
-		)
+		log.Err(err).Msg("failed to bind request body")
+		return c.JSON(http.StatusBadRequest, ErrMessage{
+			Message: "invalid request body",
+			Success: false,
+		})
 	}
 
 	if err := c.Validate(emailRequest); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return err
+		log.Err(err).Msg("failed to validate payload")
+		return c.JSON(http.StatusBadRequest, ErrMessage{
+			Message: fmt.Sprintf("failed to validate payload: %s", err.Error()),
+			Success: false,
+		})
 	}
 
 	resp, err := w.App.AccountRedis.GetByVerifyEmail(c.Request().Context(), emailRequest.Email)
-	if err != nil && rueidis.IsRedisNil(err) {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "email verification failed",
-			},
-		)
+	if err != nil && !errors.Is(err, rueidis.Nil) {
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "email verification failed",
+			Success: false,
+		})
 	}
 
-	if err == nil && resp != "" {
-		return c.JSON(
-			http.StatusConflict,
-			echo.Map{
-				"message": "email verification already sent",
-			},
-		)
+	if resp != "" {
+		return c.JSON(http.StatusConflict, ErrMessage{
+			Message: "email verification already sent",
+			Success: false,
+		})
 	}
 
 	_, err = w.App.AccountPostgres.GetUserByEmail(c.Request().Context(), emailRequest.Email)
-
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return c.JSON(
-				http.StatusBadRequest,
-				echo.Map{
-					"message": "user not found",
-				},
-			)
+			return c.JSON(http.StatusBadRequest, ErrMessage{
+				Message: "user not found",
+				Success: false,
+			})
 		}
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to get user",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to fetch user",
+		})
 	}
 
 	token, err := auth.GenerateRandomToken(32)
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(http.StatusInternalServerError, echo.Map{
-			"message": "failed to generate verify token",
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to generate verify token",
+			Success: false,
 		})
 	}
 
 	verifyEmailURL := fmt.Sprintf("%s/auth/verifyEmail/%s", w.appURL, token)
 
 	if err := w.App.EmailSender.SendVerificationEmail(emailRequest.Email, verifyEmailURL); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(http.StatusInternalServerError, echo.Map{
-			"message": "failed to send email verification url",
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to send email verification url",
+			Success: false,
 		})
 	}
 
 	if err := w.App.AccountRedis.SetEmailVerify(c.Request().Context(), emailRequest.Email, token); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "email verification failed",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "email verification failed",
+		})
 	}
 
-	return c.JSON(
-		http.StatusOK,
-		echo.Map{
-			"message": "verification email successfully sent",
-		},
-	)
+	return c.JSON(http.StatusOK, ResponseOk{
+		Message: "verification email successfully sent",
+		Success: true,
+	})
 }
 
 func (w *WebApp) verifyEmail(c echo.Context) error {
@@ -295,80 +266,68 @@ func (w *WebApp) verifyEmail(c echo.Context) error {
 
 	email, err := w.App.AccountRedis.GetByVerifyToken(c.Request().Context(), token)
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
 		if errors.Is(err, rueidis.Nil) {
-			return c.JSON(
-				http.StatusBadRequest,
-				echo.Map{
-					"message": "token is not valid or expierd",
-				},
-			)
+			return c.JSON(http.StatusBadRequest, ErrMessage{
+				Message: "verify token is not valid or expierd",
+				Success: false,
+			})
 		}
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to verify token",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to check verify token",
+			Success: false,
+		})
 	}
 
 	dbUser, err := w.App.AccountPostgres.GetUserByEmail(c.Request().Context(), email)
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return c.JSON(
-				http.StatusNotFound,
-				echo.Map{
-					"message": "user not found",
-				},
-			)
+			return c.JSON(http.StatusNotFound, ErrMessage{
+				Message: "user not found",
+				Success: false,
+			})
 		}
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to get user",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to fetch user",
+			Success: false,
+		})
 	}
 
 	dbUser.IsEmailVerified = true
 
 	if err := w.App.AccountPostgres.UpdateUserVerifyEmail(c.Request().Context(), dbUser); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to update email verify",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to verify email",
+		})
 	}
 
-	return c.JSON(
-		http.StatusOK,
-		echo.Map{
-			"message": "email verified",
+	return c.JSON(http.StatusOK, ResponseOk{
+		Message: "email verified successfully",
+		Success: true,
+		Data: echo.Map{
+			"user": dbUser,
 		},
-	)
+	})
 }
 
 func (w *WebApp) updateEmail(c echo.Context) error {
-	user := c.Get("user").(*auth.Claims)
-
 	var updateEmailRequest EmailRequest
 	if err := c.Bind(&updateEmailRequest); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusBadRequest,
-			echo.Map{
-				"message": "invalid request body",
-			},
-		)
+		log.Err(err).Msg("failed to bind request body")
+		return c.JSON(http.StatusBadRequest, ErrMessage{
+			Message: "invalid request body",
+			Success: false,
+		})
 	}
 
 	if err := c.Validate(updateEmailRequest); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return err
+		log.Err(err).Msg("failed to validate payload")
+		return c.JSON(http.StatusBadRequest, ErrMessage{
+			Message: fmt.Sprintf("failed to validate payload: %s", err.Error()),
+			Success: false,
+		})
 	}
+
+	user := c.Get("user").(*auth.Claims)
 
 	updatedUser := entity.User{
 		ID:              user.UserID,
@@ -377,43 +336,40 @@ func (w *WebApp) updateEmail(c echo.Context) error {
 	}
 
 	if err := w.App.AccountPostgres.UpdateUserEmail(c.Request().Context(), updatedUser); err != nil {
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to update email",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to update email",
+			Success: false,
+		})
 	}
 
-	return c.JSON(
-		http.StatusOK,
-		echo.Map{
-			"message":   "email updated",
-			"new_email": updatedUser.Email,
+	return c.JSON(http.StatusOK, ResponseOk{
+		Message: "email updated successfully",
+		Success: true,
+		Data: echo.Map{
+			"user": updatedUser,
 		},
-	)
+	})
 }
 
 func (w *WebApp) updatePassword(c echo.Context) error {
-	user := c.Get("user").(*auth.Claims)
-
 	var passwordUpdateRequest PasswordUpdateRequest
 	if err := c.Bind(&passwordUpdateRequest); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusBadRequest,
-			echo.Map{
-				"message": "invalid request body",
-			},
-		)
+		log.Err(err).Msg("failed to bind request body")
+		return c.JSON(http.StatusBadRequest, ErrMessage{
+			Message: "invalid request body",
+			Success: false,
+		})
 	}
 
 	if err := c.Validate(passwordUpdateRequest); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return err
+		log.Err(err).Msg("failed to validate payload")
+		return c.JSON(http.StatusBadRequest, ErrMessage{
+			Message: fmt.Sprintf("failed to validate payload: %s", err.Error()),
+			Success: false,
+		})
 	}
 
-	if strings.Compare(passwordUpdateRequest.Password, passwordUpdateRequest.PasswordRepeat) != 0 {
+	if passwordUpdateRequest.Password != passwordUpdateRequest.PasswordRepeat {
 		return c.JSON(
 			http.StatusBadRequest,
 			echo.Map{
@@ -422,269 +378,228 @@ func (w *WebApp) updatePassword(c echo.Context) error {
 		)
 	}
 
+	user := c.Get("user").(*auth.Claims)
+
 	dbUser, err := w.App.AccountPostgres.GetUserByID(c.Request().Context(), user.UserID)
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return c.JSON(
-				http.StatusNotFound,
-				echo.Map{
-					"message": "user not found",
-				},
-			)
+			return c.JSON(http.StatusNotFound, ErrMessage{
+				Message: "user not found",
+				Success: false,
+			})
 		}
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to get user",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to fetch user",
+			Success: false,
+		})
 	}
 
 	if err := auth.PasswordVerify(dbUser.Password, passwordUpdateRequest.OldPassword); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "incorrect password",
-			},
-		)
+		return c.JSON(http.StatusUnauthorized, ErrMessage{
+			Message: "incorrect password",
+			Success: false,
+		})
 	}
 
 	newPasswordHash, err := auth.PasswordHash(passwordUpdateRequest.Password)
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to update password",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to update password",
+			Success: false,
+		})
 	}
 
 	dbUser.Password = newPasswordHash
 
 	if err := w.App.AccountPostgres.UpdateUserPassword(c.Request().Context(), dbUser); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to update password",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to update password",
+			Success: false,
+		})
 	}
 
-	return c.JSON(
-		http.StatusOK,
-		echo.Map{
-			"message": "password updated",
-		},
-	)
-
+	return c.JSON(http.StatusOK, ResponseOk{
+		Message: "password updated successfully",
+		Success: true,
+	})
 }
 
 func (w *WebApp) requestResetPassword(c echo.Context) error {
 	var emailRequest EmailRequest
 	if err := c.Bind(&emailRequest); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusBadRequest,
-			echo.Map{
-				"message": "invalid request body",
-			},
-		)
+		log.Err(err).Msg("failed to bind request body")
+		return c.JSON(http.StatusBadRequest, ErrMessage{
+			Message: "invalid request body",
+			Success: false,
+		})
 	}
 
 	if err := c.Validate(emailRequest); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return err
+		log.Err(err).Msg("failed to validate payload")
+		return c.JSON(http.StatusBadRequest, ErrMessage{
+			Message: fmt.Sprintf("failed to validate payload: %s", err.Error()),
+			Success: false,
+		})
 	}
 
 	resp, err := w.App.AccountRedis.GetByResetPasswordEmail(c.Request().Context(), emailRequest.Email)
-	if err != nil && rueidis.IsRedisNil(err) {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "reset password failed",
-			},
-		)
+	if err != nil && !errors.Is(err, rueidis.Nil) {
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "request reset password failed",
+			Success: false,
+		})
 	}
 
-	if err == nil && resp != "" {
-		return c.JSON(
-			http.StatusConflict,
-			echo.Map{
-				"message": "reset password already sent",
-			},
-		)
+	if resp != "" {
+		return c.JSON(http.StatusConflict, ErrMessage{
+			Message: "reset password already sent",
+			Success: false,
+		})
 	}
 
 	_, err = w.App.AccountPostgres.GetUserByEmail(c.Request().Context(), emailRequest.Email)
-
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return c.JSON(
-				http.StatusBadRequest,
-				echo.Map{
-					"message": "user not found",
-				},
-			)
+			return c.JSON(http.StatusBadRequest, ErrMessage{
+				Message: "user not found",
+				Success: false,
+			})
 		}
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to get user",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to fetch user",
+			Success: false,
+		})
 	}
 
 	token, err := auth.GenerateRandomToken(32)
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(http.StatusInternalServerError, echo.Map{
-			"message": "failed to generate reset token",
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to generate reset password token",
+			Success: false,
 		})
 	}
 
 	resetPasswordURL := fmt.Sprintf("%s/auth/resetPassword/%s", w.appURL, token)
 
 	if err := w.App.EmailSender.SendResetPasswordEmail(emailRequest.Email, resetPasswordURL); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(http.StatusInternalServerError, echo.Map{
-			"message": "failed to send reset password url",
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to send reset password url",
+			Success: false,
 		})
 	}
 
 	if err := w.App.AccountRedis.SetResetPassword(c.Request().Context(), emailRequest.Email, token); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed reset password",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "request reset password failed",
+			Success: false,
+		})
 	}
 
-	return c.JSON(
-		http.StatusOK,
-		echo.Map{
-			"message": "reset password email successfully sent",
-		},
-	)
+	return c.JSON(http.StatusOK, ResponseOk{
+		Message: "reset password email successfully sent",
+		Success: true,
+	})
 }
 
 func (w *WebApp) resetPassword(c echo.Context) error {
 	var passwordResetRequest PasswordResetRequest
 	if err := c.Bind(&passwordResetRequest); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusBadRequest,
-			echo.Map{
-				"message": "invalid request body",
-			},
-		)
+		log.Err(err).Msg("failed to bind request body")
+		return c.JSON(http.StatusBadRequest, ErrMessage{
+			Message: "invalid request body",
+			Success: false,
+		})
 	}
 
 	if err := c.Validate(passwordResetRequest); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return err
+		log.Err(err).Msg("failed to validate payload")
+		return c.JSON(http.StatusBadRequest, ErrMessage{
+			Message: fmt.Sprintf("failed to validate payload: %s", err.Error()),
+			Success: false,
+		})
 	}
 
-	if strings.Compare(passwordResetRequest.Password, passwordResetRequest.PasswordRepeat) != 0 {
-		return c.JSON(
-			http.StatusBadRequest,
-			echo.Map{
-				"message": "passwords is not match",
-			},
-		)
+	if passwordResetRequest.Password != passwordResetRequest.PasswordRepeat {
+		return c.JSON(http.StatusBadRequest, ErrMessage{
+			Message: "passwords is not match",
+			Success: false,
+		})
 	}
 
 	userEmail, err := w.App.AccountRedis.GetByResetPasswordToken(c.Request().Context(), passwordResetRequest.Token)
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
-		if rueidis.IsRedisNil(err) {
-			return c.JSON(
-				http.StatusBadRequest,
-				echo.Map{
-					"message": "token is not valid or expired",
-				},
-			)
+		if errors.Is(err, rueidis.Nil) {
+			return c.JSON(http.StatusBadRequest, ErrMessage{
+				Message: "reset password token is not valid or expired",
+				Success: false,
+			})
 		}
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to reset password",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to reset password",
+			Success: false,
+		})
 	}
 
 	dbUser, err := w.App.AccountPostgres.GetUserByEmail(c.Request().Context(), userEmail)
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return c.JSON(
-				http.StatusNotFound,
-				echo.Map{
-					"message": "user not found",
-				},
-			)
+			return c.JSON(http.StatusNotFound, ErrMessage{
+				Message: "user not found",
+				Success: false,
+			})
 		}
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to get user",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to fetch user",
+			Success: false,
+		})
 	}
 
 	hashedPassword, err := auth.PasswordHash(passwordResetRequest.Password)
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to reset password",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to reset password",
+			Success: false,
+		})
 	}
 
 	dbUser.Password = hashedPassword
 
 	if err := w.App.AccountPostgres.UpdateUserPassword(c.Request().Context(), dbUser); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to reset password",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to reset password",
+			Success: false,
+		})
 	}
 
-	return c.JSON(
-		http.StatusOK,
-		echo.Map{
-			"message": "password changed successfully",
-		},
-	)
+	return c.JSON(http.StatusOK, ResponseOk{
+		Message: "password changed successfully",
+		Success: true,
+	})
+}
+
+func isUniqueViolation(err error) bool {
+	if pgErr, ok := err.(*pgconn.PgError); ok {
+		return pgErr.Code == "23505"
+	}
+	return false
 }
 
 func (w *WebApp) createURL(c echo.Context) error {
 	var createURLRequest URLRequest
 	if err := c.Bind(&createURLRequest); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusBadRequest,
-			echo.Map{
-				"message": "invalid request body",
-			},
-		)
+		log.Err(err).Msg("failed to bind request body")
+		return c.JSON(http.StatusBadRequest, ErrMessage{
+			Message: "invalid request body",
+			Success: false,
+		})
 	}
 
 	if err := c.Validate(createURLRequest); err != nil {
-		fmt.Printf("error: %v\n", err)
-		return err
+		log.Err(err).Msg("failed to validate payload")
+		return c.JSON(http.StatusBadRequest, ErrMessage{
+			Message: fmt.Sprintf("failed to validate payload: %s", err.Error()),
+			Success: false,
+		})
 	}
 
 	user := c.Get("user").(*auth.Claims)
@@ -699,30 +614,30 @@ func (w *WebApp) createURL(c echo.Context) error {
 			OriginalURL: createURLRequest.OriginalURL,
 			UserID:      user.UserID,
 		}
-		log.Printf("new url generated: %s, %v\n", shortURL, newURL)
+		log.Info().Str("short_url", shortURL).Msg("new url generated")
 
 		if err = w.App.URLPostgres.CreateURL(c.Request().Context(), newURL); err != nil {
-			fmt.Printf("error: %v", err)
 			if isUniqueViolation(err) {
-				log.Printf("duplicate short URL, generating a new one\n")
+				log.Info().Str("short_url", shortURL).Msg("duplicate short url, generating a new one")
 				continue
 			}
 
-			return c.JSON(
-				http.StatusInternalServerError,
-				echo.Map{
-					"message": "failed to create short url",
-				},
-			)
+			return c.JSON(http.StatusInternalServerError, ErrMessage{
+				Message: "failed to create url",
+				Success: false,
+			})
 		}
 
 		break
 	}
 
-	return c.JSON(
-		http.StatusOK,
-		newURL,
-	)
+	return c.JSON(http.StatusOK, ResponseOk{
+		Message: "url created successfully",
+		Success: true,
+		Data: echo.Map{
+			"url": newURL,
+		},
+	})
 }
 
 func (w *WebApp) deleteURL(c echo.Context) error {
@@ -730,50 +645,38 @@ func (w *WebApp) deleteURL(c echo.Context) error {
 
 	dbURL, err := w.App.URLPostgres.GetURLByShortURL(c.Request().Context(), shortURL)
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
 		if errors.Is(err, pgx.ErrNoRows) {
-			fmt.Printf("error: %v\n", err)
-			return c.JSON(
-				http.StatusNotFound,
-				echo.Map{
-					"message": "url not found",
-				},
-			)
+			return c.JSON(http.StatusNotFound, ErrMessage{
+				Message: "url not found",
+				Success: false,
+			})
 		}
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to get url",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to fetch url",
+			Success: false,
+		})
 	}
 
 	user := c.Get("user").(*auth.Claims)
 
 	if dbURL.UserID != user.UserID {
-		return c.JSON(
-			http.StatusForbidden,
-			echo.Map{
-				"message": "you not have access to delete this url",
-			},
-		)
+		return c.JSON(http.StatusForbidden, ErrMessage{
+			Message: "not have access to delete this url",
+			Success: false,
+		})
 	}
 
 	if err = w.App.URLPostgres.DeleteURL(c.Request().Context(), dbURL); err != nil {
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to delete url",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to delete url",
+			Success: false,
+		})
 	}
 
-	return c.JSON(
-		http.StatusOK,
-		echo.Map{
-			"message": "url deleted",
-		},
-	)
+	return c.JSON(http.StatusOK, ResponseOk{
+		Message: "url deleted successfully",
+		Success: true,
+	})
 }
 
 func (w *WebApp) getURL(c echo.Context) error {
@@ -781,39 +684,33 @@ func (w *WebApp) getURL(c echo.Context) error {
 
 	dbURL, err := w.App.URLPostgres.GetURLByShortURL(c.Request().Context(), shortURL)
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
 		if errors.Is(err, pgx.ErrNoRows) {
-			fmt.Printf("error: %v\n", err)
-			return c.JSON(
-				http.StatusNotFound,
-				echo.Map{
-					"message": "url not found",
-				},
-			)
+			return c.JSON(http.StatusNotFound, ErrMessage{
+				Message: "url not found",
+				Success: false,
+			})
 		}
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to get url",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to fetch url",
+			Success: false,
+		})
 	}
 
 	user := c.Get("user").(*auth.Claims)
 
 	if dbURL.UserID != user.UserID {
-		return c.JSON(
-			http.StatusForbidden,
-			echo.Map{
-				"message": "you not have access to get this url",
-			},
-		)
+		return c.JSON(http.StatusForbidden, ErrMessage{
+			Message: "not have access to fetch this url",
+			Success: false,
+		})
 	}
 
-	return c.JSON(
-		http.StatusOK,
-		dbURL,
-	)
+	return c.JSON(http.StatusOK, ResponseOk{
+		Success: true,
+		Data: echo.Map{
+			"url": dbURL,
+		},
+	})
 }
 
 func (w *WebApp) getAllURLs(c echo.Context) error {
@@ -821,25 +718,25 @@ func (w *WebApp) getAllURLs(c echo.Context) error {
 
 	urls, err := w.App.URLPostgres.GetURLsByUserID(c.Request().Context(), user.UserID)
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to get urls",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to fetch urls",
+			Success: false,
+		})
 	}
 
 	if len(urls) == 0 {
-		return c.JSON(
-			http.StatusNotFound,
-			echo.Map{
-				"message": "urls is empty",
-			},
-		)
+		return c.JSON(http.StatusNotFound, ErrMessage{
+			Message: "urls is empty",
+			Success: false,
+		})
 	}
 
-	return c.JSON(http.StatusOK, urls)
+	return c.JSON(http.StatusOK, ResponseOk{
+		Success: true,
+		Data: echo.Map{
+			"urls": urls,
+		},
+	})
 }
 
 func (w *WebApp) redirectURL(c echo.Context) error {
@@ -847,50 +744,32 @@ func (w *WebApp) redirectURL(c echo.Context) error {
 
 	cacheURL, err := w.App.URLRedis.GetFromCacheByShortURL(c.Request().Context(), shortURL)
 	if err == nil {
-		fmt.Printf("redirected to: %s\n", cacheURL.OriginalURL)
-		go func() {
-			if err := w.App.URLPostgres.UpdateURLClickCount(context.Background(), shortURL); err != nil {
-				fmt.Printf("DB error in click update: %v\n", err)
-			}
-			fmt.Printf("%s: click count updated\n", shortURL)
-		}()
-		return c.Redirect(http.StatusMovedPermanently, cacheURL.OriginalURL)
-	}
+		log.Info().Str("short_url", shortURL).Msg("redirected from cache")
 
-	if !rueidis.IsRedisNil(err) {
-		fmt.Printf("Redis error: %v\n", err)
+		go w.App.URLPostgres.UpdateURLClickCount(context.Background(), shortURL)
+
+		return c.Redirect(http.StatusMovedPermanently, cacheURL.OriginalURL)
 	}
 
 	dbURL, err := w.App.URLPostgres.GetURLByShortURL(c.Request().Context(), shortURL)
 	if err != nil {
-		fmt.Printf("error: %v\n", err)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return c.JSON(
-				http.StatusNotFound,
-				echo.Map{
-					"message": "url not found",
-				},
-			)
+			return c.JSON(http.StatusNotFound, ErrMessage{
+				Message: "url not found",
+				Success: false,
+			})
 		}
-		return c.JSON(
-			http.StatusInternalServerError,
-			echo.Map{
-				"message": "failed to get url",
-			},
-		)
+		return c.JSON(http.StatusInternalServerError, ErrMessage{
+			Message: "failed to fetch url",
+			Success: false,
+		})
 	}
 
-	if err = w.App.URLRedis.SetURLToCache(c.Request().Context(), dbURL); err != nil {
-		fmt.Printf("Redis set error: %v\n", err)
-	}
+	w.App.URLRedis.SetURLToCache(c.Request().Context(), dbURL)
 
-	go func() {
-		if err := w.App.URLPostgres.UpdateURLClickCount(context.Background(), shortURL); err != nil {
-			fmt.Printf("DB error in click update: %v\n", err)
-		}
-		fmt.Printf("%s: click count updated\n", shortURL)
-	}()
+	go w.App.URLPostgres.UpdateURLClickCount(context.Background(), shortURL)
 
-	fmt.Printf("redirected to: %s\n", dbURL.OriginalURL)
+	log.Info().Str("short_url", shortURL).Msg("redirected from db")
+
 	return c.Redirect(http.StatusMovedPermanently, dbURL.OriginalURL)
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/redis/rueidis"
+	"github.com/rs/zerolog/log"
 )
 
 var _ RateLimiter = &RateLimitRepository{}
@@ -50,7 +51,8 @@ func (r *RateLimitRepository) IsAllowed(ctx context.Context, ip string, limit in
 	resp := r.client.DoMulti(ctx, cmds...)
 	for _, result := range resp {
 		if err := result.Error(); err != nil {
-			return false, 0, time.Time{}, fmt.Errorf("failed to get resp: %w", err)
+			log.Err(err).Msg("failed to fetch rate limit response")
+			return false, 0, time.Time{}, fmt.Errorf("failed to fetch ratelimit response: %w", err)
 		}
 	}
 
