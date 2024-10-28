@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/redis/rueidis"
+	"github.com/rs/zerolog/log"
 )
 
 var _ URLRedis = &URLRedisRepository{}
@@ -23,7 +24,8 @@ func NewURLRedisRepository(redisClient rueidis.Client) *URLRedisRepository {
 func (u *URLRedisRepository) Save(ctx context.Context, url entity.URL) error {
 	jsonData, err := json.Marshal(url)
 	if err != nil {
-		return fmt.Errorf("failed to serialize URL: %w", err)
+		log.Err(err).Msg("failed to serialize url")
+		return fmt.Errorf("failed to serialize url: %w", err)
 	}
 
 	key := "url:" + url.ShortURL
@@ -32,7 +34,8 @@ func (u *URLRedisRepository) Save(ctx context.Context, url entity.URL) error {
 
 	err = u.client.Do(ctx, cmd).Error()
 	if err != nil {
-		return fmt.Errorf("failed to save url into redis: %w", err)
+		log.Err(err).Interface("url", url).Msg("failed to set url in redis")
+		return fmt.Errorf("failed to set url in redis: %w", err)
 	}
 
 	return nil
@@ -44,15 +47,17 @@ func (u *URLRedisRepository) ByShortURL(ctx context.Context, shortURL string) (e
 
 	jsonData, err := u.client.Do(ctx, cmd).ToString()
 	if err != nil {
+		log.Err(err).Str("short_url", shortURL).Msg("failed to fetch url from redis")
 		if rueidis.IsRedisNil(err) {
 			return entity.URL{}, fmt.Errorf("url not found")
 		}
-		return entity.URL{}, fmt.Errorf("failed to get url from redis: %w", err)
+		return entity.URL{}, fmt.Errorf("failed to fetch url from redis: %w", err)
 	}
 
 	var url entity.URL
 	err = json.Unmarshal([]byte(jsonData), &url)
 	if err != nil {
+		log.Err(err).Str("short_url", shortURL).Msg("failed to deserialize url")
 		return entity.URL{}, fmt.Errorf("failed to deserialize url: %w", err)
 	}
 

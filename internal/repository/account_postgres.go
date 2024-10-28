@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"kuchak/internal/entity"
-	"log"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rs/zerolog/log"
 )
 
 var _ Account = &AccountPostgresRepository{}
@@ -28,10 +28,11 @@ func (a *AccountPostgresRepository) ByID(ctx context.Context, ID int) (entity.Us
 	var user entity.User
 	err := a.session.QueryRow(ctx, query, ID).Scan(&user.ID, &user.Email, &user.Password, &user.IsEmailVerified, &user.CreatedAt)
 	if err != nil {
+		log.Err(err).Int("id", ID).Msg("failed to fetch user by id")
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.User{}, fmt.Errorf("user not found: %w", pgx.ErrNoRows)
 		}
-		return entity.User{}, fmt.Errorf("db query failed: %w", err)
+		return entity.User{}, fmt.Errorf("failed to fetch user from db: %w", err)
 	}
 
 	return user, nil
@@ -43,10 +44,11 @@ func (a *AccountPostgresRepository) ByEmail(ctx context.Context, email string) (
 	var user entity.User
 	err := a.session.QueryRow(ctx, query, email).Scan(&user.ID, &user.Email, &user.Password, &user.IsEmailVerified, &user.CreatedAt)
 	if err != nil {
+		log.Err(err).Str("email", email).Msg("failed to fetch user by email")
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.User{}, fmt.Errorf("user not found: %w", pgx.ErrNoRows)
 		}
-		return entity.User{}, fmt.Errorf("db query failed: %w", err)
+		return entity.User{}, fmt.Errorf("failed to fetch user from db: %w", err)
 	}
 
 	return user, nil
@@ -58,9 +60,9 @@ func (a *AccountPostgresRepository) Save(ctx context.Context, user entity.User) 
 
 	_, err := a.session.Exec(ctx, query, user.Email, user.Password)
 	if err != nil {
-		return fmt.Errorf("failed to create new user: %w", err)
+		log.Err(err).Interface("user", user).Msg("failed to create user")
+		return fmt.Errorf("failed to create user: %w", err)
 	}
-	log.Printf("New user created")
 
 	return nil
 }
@@ -71,7 +73,8 @@ func (a *AccountPostgresRepository) Delete(ctx context.Context, user entity.User
 
 	_, err := a.session.Exec(ctx, query, user.Email)
 	if err != nil {
-		return fmt.Errorf("failed to delete user %v, error: %w", user, err)
+		log.Err(err).Interface("user", user).Msg("failed to delete user")
+		return fmt.Errorf("failed to delete user: %v error: %w", user, err)
 	}
 
 	return nil
@@ -84,7 +87,8 @@ func (a *AccountPostgresRepository) UpdateEmail(ctx context.Context, user entity
 
 	_, err := a.session.Exec(ctx, query, user.Email, user.ID)
 	if err != nil {
-		return fmt.Errorf("failed to update email for user: %v, error:  %w", user, err)
+		log.Err(err).Interface("user", user).Msg("failed to update email")
+		return fmt.Errorf("failed to update email: %v error: %w", user, err)
 	}
 
 	return nil
@@ -97,7 +101,8 @@ func (a *AccountPostgresRepository) UpdatePassword(ctx context.Context, user ent
 
 	_, err := a.session.Exec(ctx, query, user.Password, user.ID)
 	if err != nil {
-		return fmt.Errorf("failed to update password for user: %v, error: %w", user, err)
+		log.Err(err).Interface("user", user).Msg("failed to update password")
+		return fmt.Errorf("failed to update password: %v error: %w", user, err)
 	}
 
 	return nil
@@ -110,7 +115,8 @@ func (a *AccountPostgresRepository) UpdateVerifyEmail(ctx context.Context, user 
 
 	_, err := a.session.Exec(ctx, query, user.IsEmailVerified, user.ID)
 	if err != nil {
-		return fmt.Errorf("failed to update email verify for user: %v error: %w", user, err)
+		log.Err(err).Interface("user", user).Msg("failed to update email verification")
+		return fmt.Errorf("failed to update email verification: %v error: %w", user, err)
 	}
 
 	return nil

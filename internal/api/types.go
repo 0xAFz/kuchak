@@ -35,3 +35,14 @@ type AuthTokenResponse struct {
 type URLRequest struct {
 	OriginalURL string `json:"original_url"`
 }
+
+type ErrMessage struct {
+	Message string `json:"message"`
+	Success bool   `json:"success"`
+}
+
+type ResponseOk struct {
+	Message string `json:"message"`
+	Success bool   `json:"success"`
+	Data    any    `json:"data,omitempty"`
+}

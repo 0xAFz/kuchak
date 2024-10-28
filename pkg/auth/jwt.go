@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -42,6 +43,7 @@ func ValidateToken(tokenStr, secret string) (*Claims, error) {
 	})
 
 	if err != nil || !t.Valid {
+		log.Err(err).Msg("failed to parse jwt")
 		return nil, errors.New("invalid token")
 	}
 
