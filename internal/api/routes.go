@@ -58,7 +58,7 @@ func (w *WebApp) routes() {
 	u.POST("/create", w.createURL)
 	u.DELETE("/delete/:shortURL", w.deleteURL)
 
-	w.e.GET("/healthz", w.healthz, w.rateLimit(2, time.Hour*1))
+	w.e.GET("/healthz", w.healthz)
 	w.e.GET("/favicon.ico", func(c echo.Context) error {
 		return c.NoContent(http.StatusNotFound)
 	})
