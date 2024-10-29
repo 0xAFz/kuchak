@@ -14,6 +14,7 @@ type Config struct {
 	PostgresPort       string
 	PostgresDB         string
 	RedisHost          string
+	RedisPort          string
 	SmtpHost           string
 	SmtpPort           string
 	SmtpUsername       string
@@ -37,6 +38,7 @@ func LoadConfig() {
 		PostgresPort:       viper.GetString("POSTGRES_PORT"),
 		PostgresDB:         viper.GetString("POSTGRES_DB"),
 		RedisHost:          viper.GetString("REDIS_HOST"),
+		RedisPort:          viper.GetString("REDIS_PORT"),
 		SmtpHost:           viper.GetString("SMTP_HOST"),
 		SmtpPort:           viper.GetString("SMTP_PORT"),
 		SmtpUsername:       viper.GetString("SMTP_USERNAME"),
