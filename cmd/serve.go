@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"kuchak/internal/api"
 	"kuchak/internal/config"
 	"kuchak/internal/repository"
@@ -34,7 +35,7 @@ func Serve() {
 		log.Fatal().Err(err).Msg("failed to ping postgres")
 	}
 
-	redisClient, err := redis.NewRedisClient(config.AppConfig.RedisHost)
+	redisClient, err := redis.NewRedisClient(fmt.Sprintf("%s:%s", config.AppConfig.RedisHost, config.AppConfig.RedisPort))
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to connect redis")
 	}
