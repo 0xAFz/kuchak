@@ -18,7 +18,7 @@ import (
 )
 
 func (w *WebApp) healthz(c echo.Context) error {
-	return c.JSON(http.StatusOK, echo.Map{"success": true})
+	return c.String(http.StatusOK, "OK\n")
 }
 
 func (w *WebApp) login(c echo.Context) error {
