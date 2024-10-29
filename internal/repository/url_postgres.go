@@ -31,7 +31,7 @@ func (u *URLPostgresRepository) ByID(ctx context.Context, ID int) (entity.URL, e
 	err := u.session.QueryRow(ctx, query, ID).Scan(&url.ID, &url.ShortURL, &url.OriginalURL, &url.UserID, &url.ClickCount, &url.CreatedAt)
 	if err != nil {
 		log.Err(err).Int("id", ID).Msg("failed to fetch url by id")
-		return entity.URL{}, fmt.Errorf("failed to fetch url by id: %v", err)
+		return entity.URL{}, fmt.Errorf("failed to fetch url by id: %w", err)
 	}
 
 	return url, nil
@@ -46,7 +46,7 @@ func (u *URLPostgresRepository) ByShortURL(ctx context.Context, shortURL string)
 	err := u.session.QueryRow(ctx, query, shortURL).Scan(&url.ID, &url.ShortURL, &url.OriginalURL, &url.UserID, &url.ClickCount, &url.CreatedAt)
 	if err != nil {
 		log.Err(err).Str("short_url", shortURL).Msg("failed to fetch url by short_url")
-		return entity.URL{}, fmt.Errorf("failed to fetch url by short_url: %v", err)
+		return entity.URL{}, fmt.Errorf("failed to fetch url by short_url: %w", err)
 	}
 
 	return url, nil
@@ -62,7 +62,7 @@ func (u *URLPostgresRepository) ByUserID(ctx context.Context, userID int) ([]ent
 	rows, err := u.session.Query(ctx, query, userID)
 	if err != nil {
 		log.Err(err).Int("user_id", userID).Msg("failed to fetch urls by user id")
-		return nil, fmt.Errorf("failed to fetch urls by user id: %v", err)
+		return nil, fmt.Errorf("failed to fetch urls by user id: %w", err)
 	}
 	defer rows.Close()
 
@@ -70,14 +70,14 @@ func (u *URLPostgresRepository) ByUserID(ctx context.Context, userID int) ([]ent
 		var url entity.URL
 		if err := rows.Scan(&url.ID, &url.ShortURL, &url.OriginalURL, &url.UserID, &url.ClickCount, &url.CreatedAt); err != nil {
 			log.Err(err).Msg("failed to scan url row")
-			return nil, fmt.Errorf("failed to scan url row: %v", err)
+			return nil, fmt.Errorf("failed to scan url row: %w", err)
 		}
 		urls = append(urls, url)
 	}
 
 	if err := rows.Err(); err != nil {
 		log.Err(err).Msg("failed to iterate url rows")
-		return nil, fmt.Errorf("rows iteration error: %v", err)
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 
 	return urls, nil
