@@ -93,7 +93,6 @@ services:
       timeout: 5s
       retries: 5
     deploy:
-      mode: global
       restart_policy:
         condition: on-failure
         delay: 30s
@@ -146,8 +145,6 @@ services:
       retries: 3
       start_period: 5s
     deploy:
-      mode: global
-      replicas: 1
       restart_policy:
         condition: on-failure
         delay: 30s
